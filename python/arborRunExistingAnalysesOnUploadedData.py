@@ -3,6 +3,7 @@
 
 import requests
 import json
+import time
 
 
 arborURL = "http://52.204.46.78"
@@ -79,7 +80,8 @@ tableResponse = requests.get(arborAPIlocation+'item/'+itemId+'/flow/table/csv/ro
 datatable = tableResponse.json()["data"]
 
 
-# *********** now try to execute this analysis by passing it the "flow" parameter along with a parameter description block
+# *********** now try to execute this analysis by passing it a "flow" parameter 
+# along with a parameter description block.  We will call this a "task" submitted for Arbor to execute
 
 username = 'api-testing'
 password = 'api-testing'
@@ -89,7 +91,11 @@ usertoken = requests.get(arborAPIlocation+'user/authentication', auth=(username,
 authenticationHeader = {'Girder-Token': usertoken.json()['authToken']['token']}
 
 # build a JSON spec that will pass the Anolis character data and a column selector (we are using
-# the 'island' column name )
+# the 'island' column name ).  The spec includes a description of the type and the content of the input datasets
+# and a description of the type expected for the result.
+
+# Here we are passing the dataset that was just downloaded from Arbor. This can be substituted for any local
+# dataset.   
 
 task = {
     "inputs" : {
@@ -97,19 +103,25 @@ task = {
         "column": {"type": "string", "format": "text",   "data": "island"}
     },
     "outputs": {
-    "output":  {"type": "table",  "format": "rows"}
+    "output":  {"type": "table",  "format": "csv"}
     }
 }
 
-#print ''
-#print 'Input Parameters:'
-#print inputs
 
-print task
+# Start the job execution on Arbor by passing the task as an option to the analysis ID to tell it to run a job.  Note 
+# that the JSON representation of the task has been stringified to make it pass through the URL successfully.  a Job ID 
+# is assigned by Arbor as a return promise.  We check back later to retrieve the job result using the job ID. 
 
 resultPromise = requests.post(arborAPIlocation+'item/'+analysisID+'/flow',data=json.dumps(task), headers=authenticationHeader)
 jobId = resultPromise.json()['_id']
 print resultPromise.json()
 
-# Assuming the job has finished, retrieve the output
+# give Arbor some time to complete the job.  We could be more sophisticated here and check a status of the job
+# before trying to read the answer.  This will be done in a separate example. 
+
+time.sleep(30)
+
+# Assuming the job has finished, retrieve the output by asking for the result and passing the job ID.  In this case, 
+# the result will be a CSV file with only one row per island.  All continuous values will be averaged 
+
 print requests.get(arborAPIlocation + 'item/' + analysisID + '/flow/' + jobId + '/result', headers=authenticationHeader).json()
