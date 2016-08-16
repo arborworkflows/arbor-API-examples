@@ -58,7 +58,7 @@ for item in dataitemsresp.json():
 
 # request the tree content in its json.nested for
 try:
-        treeresp = requests.get(arborAPIlocation+'item/'+itemId+'/flow/tree/nested/nested');
+        treeresp = requests.get(arborAPIlocation+'item/'+itemId+'/flow/tree/newick/newick');
         print 'found a tree we were looking for by name.  Here is the downloaded tree contents:'
         print treeresp.json()['data']
 except ValueError:
