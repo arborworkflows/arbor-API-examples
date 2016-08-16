@@ -1,5 +1,5 @@
 #
-# Find data that is already loaded in Arbor and run 
+# Find data that is already loaded in Arbor and run
 
 import requests
 import json
@@ -9,25 +9,13 @@ arborURL = "http://52.204.46.78"
 arborAPIlocation = arborURL+"/girder/api/v1/"
 print 'using arbor API URL: ',arborAPIlocation
 
-resp = requests.get(arborAPIlocation+'collection')
+collectionName = 'api-testing'
 
-# find a particular collection from the list of all collections
-for coll in resp.json():
-    if (coll['name'] == 'api-testing'):
-        collectionId = coll['_id']
-        print "Getting a handle to the collection we are searching. Found collectionID:",collectionId
-        break
-            
-analysisfolderresp = requests.get(arborAPIlocation+'folder?parentType=collection&parentId='+collectionId)
-#print datafolderresp.json()
+# Find the Analyses folder within the api-testing collection
+resp = requests.get(arborAPIlocation + 'resource/lookup',
+                    params={'path': '/collection/' + collectionName + '/Analyses'})
+folderId = resp.json()['_id']
 
-# find Analyses folder inside named collection
-for folder in analysisfolderresp.json():
-    if (folder['name'] == 'Analyses'):
-        folderId = folder['_id']
-        #print "found folderID:",folderId
-        break
-        
 # loop through the 'Analyses' folder to find all the contained items in it
 dataitemsresp = requests.get(arborAPIlocation+'item?folderId='+folderId)
 itemNames = []
@@ -47,28 +35,26 @@ for item in dataitemsresp.json():
                 #print "found itemId:",itemId
                 break
 
-# return a pointer to the analysis we want to call.  We looked it up by collection 
+# return a pointer to the analysis we want to call.  We looked it up by collection
 try:
         analysisID = '0'
-        analysisresp = requests.get(arborAPIlocation+'item/'+itemId);
+        analysisresp = requests.get(arborAPIlocation+'item/'+itemId)
         if '_id' in analysisresp.json():
             analysisID = analysisresp.json()['_id']
             print 'found analysis! Here is the ID:',analysisID
 except ValueError:
+        # response and bson are both undefined
         response['error'] = "Search for analysis unsuccessful"
         print bson.json_util.dumps(response)
-        
+
 # *********** found analysis; now lets retrieve the input dataset already loaded in Arbor
 
+resp = requests.get(arborAPIlocation + 'resource/lookup',
+                    params={'path': '/collection/' + collectionName + '/Data'})
+folderId = resp.json()['_id']
+print "found folderID:",folderId
 
-# find Data folder inside named collection
-for folder in analysisfolderresp.json():
-    if (folder['name'] == 'Data'):
-        folderId = folder['_id']
-        print "found folderID:",folderId
-        break
-        
-    
+
 # loop through the 'Analyses' folder to find all the contained items in it
 dataitemsresp = requests.get(arborAPIlocation+'item?folderId='+folderId)
 itemNames = []
@@ -80,23 +66,19 @@ print itemNames
 
 # find this particular item by name inside the Data folder
 itemName = 'anolisDataAppended.csv'
-dataitemsresp = requests.get(arborAPIlocation+'item?folderId='+folderId)
-for item in dataitemsresp.json():
-        itemId = '0'
-        if (item['name'] == itemName):
-                itemId = item['_id']
-                #print item
-                print "found dataset itemId:",itemId
-                break
+resp = requests.get(arborAPIlocation + 'resource/lookup',
+                    params={'path': '/collection/' + collectionName + '/Data/' + itemName})
+itemId = resp.json()['_id']
+print "found dataset itemId:",itemId
+
 
 # we can download the dataset as a CSV, since it was loaded that way
-# or we can convert it to table:rows. 
+# or we can convert it to table:rows.
 
-tableResponse = requests.get(arborAPIlocation+'item/'+itemId+'/flow/table/csv/rows');
-#print tableResponse.json()["data"]
+tableResponse = requests.get(arborAPIlocation+'item/'+itemId+'/flow/table/csv/rows')
 datatable = tableResponse.json()["data"]
 
-        
+
 # *********** now try to execute this analysis by passing it the "flow" parameter along with a parameter description block
 
 username = 'api-testing'
@@ -104,9 +86,9 @@ password = 'api-testing'
 usertoken = requests.get(arborAPIlocation+'user/authentication', auth=(username,password))
 #print usertoken.text
 
-authenticationHeader = {'Girder-Token': usertoken.json()}
+authenticationHeader = {'Girder-Token': usertoken.json()['authToken']['token']}
 
-# build a JSON spec that will pass the Anolis character data and a column selector (we are using 
+# build a JSON spec that will pass the Anolis character data and a column selector (we are using
 # the 'island' column name )
 
 task = {
@@ -125,5 +107,9 @@ task = {
 
 print task
 
-resultPromise = requests.put(arborAPIlocation+'/api/v1/item/'+analysisID+'/flow',data=json.dumps(task), headers=authenticationHeader);
+resultPromise = requests.post(arborAPIlocation+'item/'+analysisID+'/flow',data=json.dumps(task), headers=authenticationHeader)
+jobId = resultPromise.json()['_id']
 print resultPromise.json()
+
+# Assuming the job has finished, retrieve the output
+print requests.get(arborAPIlocation + 'item/' + analysisID + '/flow/' + jobId + '/result', headers=authenticationHeader).json()
